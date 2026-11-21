@@ -270,7 +270,7 @@ async def team_info(ctx: Context) -> str:
     members = await roster(m, profiles=False)
     chans = [f"#{d.id}{'*' if d.id in m['channels'] else ''}" async for d in tref.collection("channels").stream()]
     claims = [f"  {quote(c['path'])} (@{c['member']}, {ago(c['at'])})" async for d in tref.collection("claims").stream() for c in [d.to_dict()]]
-    return (f"you: @{m['name']} ({m['role']}) in team '{team.get('name')}'\n"
+    return (f"you: @{m['name']} ({m['role']}) in team {quote(team.get('name'))}\n"
             "members and what they're working on:\n" + members + f"\nchannels: {', '.join(chans)}"
             + "\nclaimed files:\n" + ("\n".join(claims) or "  none"))
 
@@ -312,11 +312,11 @@ async def add_agent(ctx: Context, provider: str = "", name: str = "", lead: bool
     Returns a one-time setup line to paste into that agent in its project folder."""
     m = await me(ctx)
     try:
-        name, token = await new_agent(m["team"], m["name"] if m.get("uid") else m.get("handler"), name, provider, lead)
+        name, token = await new_agent(m["team"], m.get("handler") or m["name"], name, provider, lead, m["name"])
     except ApiError as e:
         raise ToolError(str(e))
     base = str(ctx.request_context.request.base_url).rstrip("/")
-    code = await new_handoff(m["team"], name, token, provider.strip().lower())
+    code = await new_handoff(m["team"], name, token, slug(provider))
     return (f"Added @{name}. Give this line to it (it works once, for 1 hour): Set up Squawk for this project: run "
             f"curl -fsS {base}/h/{code} and follow what it prints.")
 
@@ -469,9 +469,13 @@ def add_member(tx, team: str, name: str, role: str, uid: str | None = None, **ex
 async def drop_member(snap) -> None:
     """Remove a member (and the agents working for them): revoke tokens and unlink their web-app account."""
     team = snap.reference.parent.parent.id
-    async for agent in team_ref(team).collection("members").where(filter=FieldFilter("handler", "==", snap.id)).stream():
-        await drop_member(agent)
+    for field in ("handler", "created_by"):  # their agents, and any agent one of them added
+        async for agent in team_ref(team).collection("members").where(filter=FieldFilter(field, "==", snap.id)).stream():
+            await drop_member(agent)
     await revoke_tokens(team, snap.id)
+    async for other in team_ref(team).collection("members").stream():  # their DMs go with them, so a later member
+        async for d in msgs(team, "dm:" + ":".join(sorted([snap.id, other.id]))).stream():  # with the same name can't read them
+            await d.reference.delete()
     async for c in team_ref(team).collection("claims").where(filter=FieldFilter("member", "==", snap.id)).stream():
         await c.reference.delete()
     if uid := snap.to_dict().get("uid"):
@@ -506,10 +510,12 @@ async def mint_token(team: str, member: str) -> str:
     return token
 
 
-async def new_agent(tid: str, handler: str | None, name: str, provider: str, lead: bool) -> tuple[str, str]:
-    """A named agent member working for `handler` (None until a /teams project is claimed); returns (name, token).
-    No name: the first free provider-N. Each person has at most one lead agent."""
-    name, provider = name.strip().lower().removeprefix("@"), provider.strip().lower()[:32]
+async def new_agent(tid: str, handler: str | None, name: str, provider: str, lead: bool, created_by: str) -> tuple[str, str]:
+    """A named agent member working for `handler`; returns (name, token). Removing its handler or whoever created it
+    removes it too. No name: the first free provider-N. Each person has at most one lead agent."""
+    if not allow("agents:" + tid, 20, 3600):
+        raise ApiError("too many new agents in this project; try again in an hour", 429)
+    name, provider = name.strip().lower().removeprefix("@"), slug(provider)
     members = team_ref(tid).collection("members")
     n = 1
     while not name and (await members.document(auto_name(provider, n)).get()).exists:
@@ -519,7 +525,7 @@ async def new_agent(tid: str, handler: str | None, name: str, provider: str, lea
         raise ApiError("agent names are lowercase letters, digits, - and _ (max 32)")
     try:
         await members.document(name).create({"role": "member", "handler": handler, "provider": provider, "lead": lead,
-                                              "channels": {"general": 0}, "joined": time.time()})
+                                              "created_by": created_by, "channels": {"general": 0}, "joined": time.time()})
     except Conflict:
         raise ApiError(f"name '{name}' is taken in this project", 409)
     if lead:
@@ -578,16 +584,33 @@ async def redeem(code: str, name: str, uid: str | None = None) -> tuple[str, str
     return await run(db.transaction())
 
 
+def slug(provider) -> str:
+    """Providers are shown unquoted in rosters, so only name characters survive."""
+    return re.sub(r"[^a-z0-9_-]", "", str(provider).lower())[:24]
+
+
 def auto_name(provider: str, n: int = 1) -> str:
     """Default agent name when none is chosen: claude-1, claude-2, codex-1..."""
-    return f"{re.sub(r'[^a-z0-9_-]', '', provider.lower())[:24] or 'agent'}-{n}"
+    return f"{slug(provider) or 'agent'}-{n}"
+
+
+async def read_body(request: Request, limit: int) -> bytes:
+    """The request body, refusing (ValueError) instead of buffering more than `limit` bytes."""
+    data = b""
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > limit:
+            raise ValueError("request too large")
+    return data
 
 
 async def body(request: Request, auto: bool = False) -> tuple[str, str]:
+    raw = await read_body(request, 16_384)
     try:
-        data = await request.json()
+        data = json.loads(raw or b"{}")
     except ValueError:
         data = {}
+    data = data if isinstance(data, dict) else {}
     name = str(data.get("name") or (auto_name(str(data.get("provider", ""))) if auto else "")).strip().lower()
     if not NAME.match(name):
         raise ValueError("name must be lowercase letters, digits, - and _ (max 32)")
@@ -615,7 +638,7 @@ async def create_team(request: Request):
     tx.set(team_ref(team), {"name": text_field(data, "team", 64) or "team", "seq": 0, "created": time.time(),
                             "mode": "solo" if solo else "team"})
     tx.set(team_ref(team).collection("channels").document("general"), {"created_by": name})
-    token = add_member(tx, team, name, "owner", provider=str(data.get("provider", ""))[:32].lower(), lead=solo)
+    token = add_member(tx, team, name, "owner", provider=slug(data.get("provider", "")), lead=solo)
     await tx.commit()
     return joined(request, team, name, token, **({} if solo else {"invite": await new_invite(team, 10, 72)}))
 
@@ -703,7 +726,7 @@ async def handoff(request: Request):
     with open(os.path.join(STATIC, "handoff.md")) as f:
         text = f.read()
     token = h["token"] if h["token"].startswith("ac_") else xor(bytes.fromhex(h["token"]), request.path_params["code"]).decode()
-    for k, v in {"{{BASE}}": str(request.base_url).rstrip("/"), "{{TOKEN}}": token, "{{PROJECT}}": h["project"],
+    for k, v in {"{{BASE}}": str(request.base_url).rstrip("/"), "{{TOKEN}}": token, "{{PROJECT}}": quote(h["project"]),
                  "{{MEMBER}}": h["member"], "{{TOOL}}": h.get("tool", "other")}.items():
         text = text.replace(k, v)
     return PlainTextResponse(text, media_type="text/markdown", headers={"Cache-Control": "no-store"})

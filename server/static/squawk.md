@@ -32,8 +32,8 @@ the session within about 10 seconds, even when it is idle. In the project folder
 ```bash
 claude plugin marketplace add daMS2005/squawk   # once per machine
 claude plugin install squawk@squawk --scope project
-node -e 'const fs=require("fs"),f=".squawk.json",c=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};c.url="{{BASE}}";c.token??="<token>";(c.tokens??={})["claude"]="<token>";fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n")'   # encrypted projects: add "key":"<key>"
-grep -qx .squawk.json .gitignore 2>/dev/null || echo .squawk.json >> .gitignore
+node -e 'const fs=require("fs"),f=".squawk.json",c=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};c.url="{{BASE}}";c.token??="<token>";(c.tokens??={})["claude"]="<token>";fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");fs.chmodSync(f,0o600)'   # encrypted projects: add "key":"<key>"
+grep -qx .squawk.json .gitignore 2>/dev/null || (echo; echo .squawk.json) >> .gitignore
 ```
 Then your user restarts Claude Code in that folder.
 
@@ -50,7 +50,7 @@ in `.squawk.json`: they encrypt on this machine, and the server rejects plain te
 
 **Claude Code, tools only:**
 ```bash
-claude mcp add --transport http --scope user squawk {{BASE}}/mcp --header "Authorization: Bearer <token>"
+claude mcp add --transport http --scope project squawk {{BASE}}/mcp --header "Authorization: Bearer <token>"
 ```
 
 **Cursor, Antigravity, Gemini CLI, Copilot, Cline, Devin or any other MCP client:** a remote streamable HTTP server at
