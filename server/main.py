@@ -171,6 +171,79 @@ async def unread(m: dict, cid: str, limit: int) -> list[dict]:
 # ---------- MCP tools ----------
 
 
+# Sends are queued per team and written in groups: while one transaction is in flight, the sends that arrive wait
+# and go into the next one, which takes the team's message numbers once for the whole group. Bursts then cost one
+# contended write on the team doc per group instead of one per message, so they don't need retries or throttling.
+PENDING: dict[str, list[dict]] = {}
+FLUSHING: set[str] = set()
+
+
+async def flush(team: str) -> None:
+    FLUSHING.add(team)
+    try:
+        while jobs := PENDING.get(team, [])[:25]:
+            del PENDING[team][:len(jobs)]
+            try:
+                results = await post_group(db.transaction(max_attempts=20), team, jobs)
+            except Exception:  # contention across server instances outlasted the retries
+                logging.exception("send_message failed")
+                results = [ToolError("message not sent: the team is busy right now, send it again")] * len(jobs)
+            for job, r in zip(jobs, results):
+                if not job["done"].done():  # the caller may have gone away
+                    (job["done"].set_exception if isinstance(r, Exception) else job["done"].set_result)(r)
+    finally:
+        FLUSHING.discard(team)
+        PENDING.pop(team, None)
+
+
+@firestore.async_transactional
+async def post_group(tx, team: str, jobs: list[dict]) -> list:
+    """Write a group of sends in one transaction; returns (seq, webhook) or a ToolError per send."""
+    tref, snaps, writes = team_ref(team), {}, {}
+
+    async def read(ref):
+        if ref.path not in snaps:
+            snaps[ref.path] = await ref.get(transaction=tx)
+        return snaps[ref.path]
+
+    def update(ref, fields):  # one write per document, however many sends touch it
+        writes.setdefault(ref.path, (ref, {}))[1].update(fields)
+
+    t = await read(tref)
+    plans = []
+    for j in jobs:  # every read before any write, as transactions require
+        others = [await read(tref.collection("members").document(n)) for n in j["dm_with"]]
+        plans.append((others, others + [await read(r) for r in j["members"]]))
+    encrypted, seq, results = t.to_dict().get("encrypted", False), t.get("seq"), []
+    for j, (others, recipients) in zip(jobs, plans):
+        m, cid, text = j["m"], j["cid"], j["text"]
+        if any(not o.exists for o in others):
+            results.append(ToolError(f"no member {j['to']} in this team"))
+            continue
+        if problem := text_problem(text, encrypted, MAX_TEXT):
+            results.append(ToolError(problem))
+            continue
+        seq += 1
+        tx.set(msgs(team, cid).document(str(seq)), {
+            "seq": seq, "from": m["name"], "text": text, "urgent": j["urgent"], "at": firestore.SERVER_TIMESTAMP})
+        if j["urgent"]:  # copy into each recipient's urgent inbox, which their hook checks on every tool call
+            line = f"[{'@' + m['name'] if j['dm_with'] else '#' + cid}] {m['name']} (urgent, message {seq}): {quote(text)}"
+            for r in (r for r in recipients if r.exists):  # newest 20: a member doc must stay under Firestore's 1 MiB
+                inbox = writes.get(r.reference.path, (None, {}))[1].get("urgent", r.to_dict().get("urgent") or [])
+                update(r.reference, {"urgent": inbox[-19:] + [line]})
+        for o in others:
+            if cid not in o.get("channels"):
+                update(o.reference, {cursor_path(cid): 0})
+        if cid not in m["channels"]:
+            update(m["ref"], {cursor_path(cid): 0})
+        results.append((seq, None if encrypted else t.to_dict().get("webhook")))
+    for ref, fields in writes.values():
+        tx.update(ref, fields)
+    if seq != t.get("seq"):
+        tx.update(tref, {"seq": seq})
+    return results
+
+
 @mcp.tool()
 async def send_message(to: str, text: str, ctx: Context, urgent: bool = False) -> str:
     """Send a message. `to` is '#channel' for a group channel or '@name' for a direct message to a teammate.
@@ -181,43 +254,15 @@ async def send_message(to: str, text: str, ctx: Context, urgent: bool = False) -
     if not text:
         raise ToolError("text can't be empty")
     cid = channel_id(m, to)
-    tref = team_ref(m["team"])
     dm_with = [n for n in cid[3:].split(":") if n != m["name"]] if cid.startswith("dm:") else []
-    in_channel = tref.collection("members").where(filter=FieldFilter(cursor_path(cid), ">=", 0))
+    in_channel = team_ref(m["team"]).collection("members").where(filter=FieldFilter(cursor_path(cid), ">=", 0))
     channel_members = [d.reference async for d in in_channel.stream() if d.id != m["name"]] if urgent and not dm_with else []
-
-    @firestore.async_transactional
-    async def post(tx):
-        team = await tref.get(transaction=tx)
-        others = [await tref.collection("members").document(n).get(transaction=tx) for n in dm_with]
-        if any(not o.exists for o in others):
-            raise ToolError(f"no member {to} in this team")
-        recipients = others + [await r.get(transaction=tx) for r in channel_members]
-        encrypted = team.to_dict().get("encrypted", False)
-        if problem := text_problem(text, encrypted, MAX_TEXT):
-            raise ToolError(problem)
-        seq = team.get("seq") + 1
-        tx.update(tref, {"seq": seq})
-        tx.set(msgs(m["team"], cid).document(str(seq)), {
-            "seq": seq, "from": m["name"], "text": text, "urgent": urgent, "at": firestore.SERVER_TIMESTAMP})
-        if urgent:  # copy into each recipient's urgent inbox, which their hook checks on every tool call
-            line = f"[{'@' + m['name'] if dm_with else '#' + cid}] {m['name']} (urgent, message {seq}): {quote(text)}"
-            for r in (r for r in recipients if r.exists):  # newest 20: a member doc must stay under Firestore's 1 MiB
-                tx.update(r.reference, {"urgent": (r.to_dict().get("urgent") or [])[-19:] + [line]})
-        for o in others:
-            if cid not in o.get("channels"):
-                tx.update(o.reference, {cursor_path(cid): 0})
-        if cid not in m["channels"]:
-            tx.update(m["ref"], {cursor_path(cid): 0})
-        return seq
-
-    try:
-        seq = await post(db.transaction(max_attempts=20))  # bursts from many agents retry, not fail
-    except ToolError:
-        raise
-    except Exception:  # usually contention: many teammates posting at the same moment
-        logging.exception("send_message failed")
-        raise ToolError("message not sent: the team is busy right now, send it again")
+    job = {"m": m, "cid": cid, "text": text, "urgent": urgent, "to": to, "dm_with": dm_with, "members": channel_members,
+           "done": asyncio.get_running_loop().create_future()}
+    PENDING.setdefault(m["team"], []).append(job)
+    if m["team"] not in FLUSHING:
+        asyncio.create_task(flush(m["team"]))
+    seq, _ = await job["done"]
     return f"sent to {label(cid, m['name'])} (message {seq})"
 
 
