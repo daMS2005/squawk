@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "squawk": {
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/proxy.mjs"
+      ],
+      "env": {
+        "SQUAWK_URL": "${SQUAWK_URL:-}",
+        "SQUAWK_TOKEN": "${SQUAWK_TOKEN:-}",
+        "SQUAWK_KEY": "${SQUAWK_KEY:-}",
+        "AGENT_CHAT_TOKEN": "${AGENT_CHAT_TOKEN:-}",
+        "AGENT_CHAT_KEY": "${AGENT_CHAT_KEY:-}"
+      }
+    }
+  }
+}

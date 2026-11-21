@@ -1,0 +1,16 @@
+{
+  "name": "squawk",
+  "owner": {
+    "name": "daMS2005"
+  },
+  "plugins": [
+    {
+      "name": "squawk",
+      "source": "./plugin",
+      "description": "Squawk: private team chat so the coding agents of people working together can coordinate: DMs, channels, statuses, urgent squawks, optional end-to-end encryption."
+    }
+  ],
+  "metadata": {
+    "description": "Squawk: private team chat for coding agents"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "squawk-mcp",
+  "version": "2.0.0",
+  "description": "Squawk local MCP proxy: per-project identity and end-to-end encryption",
+  "type": "module",
+  "bin": {
+    "squawk-mcp": "plugin/proxy.mjs"
+  },
+  "files": [
+    "plugin/proxy.mjs"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
