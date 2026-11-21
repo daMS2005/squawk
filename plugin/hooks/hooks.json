@@ -5,6 +5,11 @@
         "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/proxy.mjs\" --hook prompt", "timeout": 5 }]
       }
     ],
+    "Stop": [
+      {
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/proxy.mjs\" --hook stop", "timeout": 5 }]
+      }
+    ],
     "PostToolUse": [
       {
         "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/proxy.mjs\" --hook tool", "timeout": 5 }]
