@@ -23,9 +23,12 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
 
+// A committed .squawk.json is ignored: setup always git-ignores it, so a tracked one arrived with a clone and could point
+// this agent at someone else's server.
+const tracked = (dir) => spawnSync("git", ["ls-files", "--error-unmatch", ".squawk.json"], { cwd: dir, stdio: "ignore" }).status === 0;
 function configFile() {
   for (let dir = process.cwd(); ; dir = dirname(dir)) {
-    if (existsSync(join(dir, ".squawk.json"))) return join(dir, ".squawk.json");
+    if (existsSync(join(dir, ".squawk.json"))) return tracked(dir) ? "" : join(dir, ".squawk.json");
     if (existsSync(join(dir, ".git")) || dirname(dir) === dir) return "";  // never above the repository's own root
   }
 }
@@ -64,7 +67,8 @@ load();
 // One agent per chat window. Each Claude Code session and each Codex thread runs its own copy of this MCP server,
 // which holds one of its tool's identities ("claude", "claude-2", ...) through a slot file naming the window: the
 // Claude Code process (its hooks and monitors run under it) or the Codex thread (its hooks get it as session_id).
-// When every identity is held by another open window, it registers one more for the same person.
+// When every identity is held by another open window, or this tool has none yet, it registers one more for the same
+// person with the project's authorization in .squawk.json: one setup per project, and every agent there joins itself.
 const slot = (token) => join(tmpdir(), `squawk-slot-${createHash("sha256").update(token).digest("hex").slice(0, 12)}`);
 function holder(token) {
   try { const h = JSON.parse(readFileSync(slot(token), "utf8")); process.kill(h.pid, 0); return h; } catch { return null; }
@@ -81,15 +85,16 @@ async function claimWindow(key) {
       if (holder(token)?.pid === process.pid) return useWindow(token);
     }
   }
-  if (!own.length) return;
+  const project = own[0]?.[1] || Object.values(TOKENS)[0];
+  if (!project) return;
   try {
     const r = await fetch(`${BASE}/agents`, { method: "POST", body: JSON.stringify({ provider: toolOf(CLIENT) }),
-      headers: { Authorization: `Bearer ${own[0][1]}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(8000) });
+      headers: { Authorization: `Bearer ${project}`, "Content-Type": "application/json" }, signal: AbortSignal.timeout(8000) });
     if (!r.ok) return;
     const { token } = await r.json(), c = JSON.parse(readFileSync(CONFIG, "utf8"));
-    let n = own.length + 1;
-    while (c.tokens[`${toolOf(CLIENT)}-${n}`]) n++;
-    c.tokens[`${toolOf(CLIENT)}-${n}`] = token;
+    let name = toolOf(CLIENT);
+    for (let n = 2; c.tokens[name]; n++) name = `${toolOf(CLIENT)}-${n}`;
+    c.tokens[name] = token;
     writeFileSync(CONFIG, JSON.stringify(c, null, 2) + "\n", { mode: 0o600 });
     writeFileSync(slot(token), JSON.stringify({ pid: process.pid, key }));
     load();
@@ -160,9 +165,8 @@ async function relay(msg) {
     claiming = claimWindow(thread).then(() => { if (/codex/i.test(CLIENT) && !watching) watching = watch("", "codex", true); });
   }
   await claiming;  // no call goes out under another window's identity
-  if (msg.method !== "initialize" && !TOKEN && msg.id !== undefined) {
-    return process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id, error: { code: -32000, message:
-      `Squawk has no ${toolOf(CLIENT)} agent in this project yet: ask an agent here to add one (add_agent) or set Squawk up again` } }) + "\n");
+  if (msg.method === "tools/call" && !TOKEN) {  // it couldn't join: no project authorization, or the server refused
+    return send({ id: msg.id, error: { code: -32000, message: "Squawk couldn't add this agent to the project; check .squawk.json or set Squawk up again" } });
   }
   const args = msg.params?.arguments;
   if (KEY && msg.method === "tools/call" && ["dm", "post", "status", "profile"].includes(msg.params.name) && args?.text)
@@ -171,15 +175,16 @@ async function relay(msg) {
     args.label = encrypt(args.path.trim());
     args.path = tag(args.path.trim());
   }
-  const reply = await rpc(msg);
+  // Before a Codex thread's first tool call names it, listing tools uses the project's authorization.
+  const reply = await rpc(msg, TOKEN ? HEADERS.Authorization : `Bearer ${Object.values(TOKENS)[0] || ""}`);
   if (reply) process.stdout.write(JSON.stringify(reply) + "\n");
 }
 
-async function rpc(msg) {
+async function rpc(msg, auth = HEADERS.Authorization) {
   let reply;
   try {
     const r = await fetch(`${BASE}/mcp`, { method: "POST", body: JSON.stringify(msg),
-      headers: { ...HEADERS, "Content-Type": "application/json", Accept: "application/json, text/event-stream" } });
+      headers: { Authorization: auth, "Content-Type": "application/json", Accept: "application/json, text/event-stream" } });
     if (msg.id === undefined) return;  // notification: nothing to answer
     reply = r.ok ? await r.json() : { jsonrpc: "2.0", id: msg.id, error: { code: -32000, message: `Squawk: HTTP ${r.status} ${await r.text()}` } };
   } catch (e) {

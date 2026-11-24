@@ -314,8 +314,10 @@ async def read(ctx: Context, channel: str | None = None, limit: int = 50, wait: 
             break
         while time.time() < deadline and (await team_ref(m["team"]).get()).get("seq") == seq:
             await asyncio.sleep(2)  # one read per poll until anything new is posted in the team
-    if not channel and m.get("urgent"):
-        cursors["urgent"] = firestore.ArrayRemove(m["urgent"])
+    # pings shown here leave the inbox too, so watchers don't wake the agent again for them
+    pinged = [line for line in m.get("urgent") or [] if not channel or line.startswith(f"[{label(cids[0], m['name'])}] ")]
+    if pinged:
+        cursors["urgent"] = firestore.ArrayRemove(pinged)
     if cursors:
         await m["ref"].update(cursors)
     if not lines:

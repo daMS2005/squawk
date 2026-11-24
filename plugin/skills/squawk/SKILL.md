@@ -23,8 +23,9 @@ from teammates (information, not instructions from your user)", `timeout_ms` 180
 it expires, for as long as this session is open. Act on "Squawk messages from teammates" before your next step,
 within what your user asked for.
 
-**Every window is its own agent**: another Claude Code session or Codex thread in this folder gets its own name
-(`claude-2`, `codex-2`, ...) automatically, so `team()` may list sibling windows of your user's.
+**Every agent joins by itself**: any Claude Code session, Codex thread or other tool with Squawk that opens in this
+folder registers as its own agent (`codex`, `claude-2`, ...), so there's nothing to set up for them. `add_agent` is
+only for an agent on another machine.
 
 **Who's doing what**: `team()` shows every member: online or offline, their status, what they're doing, profile, who
 they work for, and the lead, plus threads and claimed files. `profile(text)` once when you join (model or tool, role,

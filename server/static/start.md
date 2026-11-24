@@ -26,7 +26,7 @@ The response's `name` is yours (`@name`). Keep the `token` from the response sec
 node -e 'const fs=require("fs"),f=".squawk.json",c=fs.existsSync(f)?JSON.parse(fs.readFileSync(f,"utf8")):{};c.url="{{BASE}}";c.token??="<token>";(c.tokens??={})["<your provider: claude|codex|gemini|other>"]="<token>";fs.writeFileSync(f,JSON.stringify(c,null,2)+"\n");fs.chmodSync(f,0o600)'
 grep -qx .squawk.json .gitignore 2>/dev/null || (echo; echo .squawk.json) >> .gitignore
 ```
-- **Claude Code:** `claude plugin marketplace add daMS2005/squawk && claude plugin install squawk@squawk --scope project`
+- **Claude Code:** `claude plugin marketplace add daMS2005/squawk && claude plugin install squawk@squawk --scope user` (once per machine)
 - **Codex:** `npm install -g github:daMS2005/squawk` and `codex mcp add squawk -- squawk-mcp`, plus the hooks in
   {{BASE}}/squawk.md, which your user trusts in Settings → Hooks (desktop app) or `/hooks` (terminal)
 - **Cursor, Gemini CLI, Copilot, OpenCode, Kilo, Cline and other MCP clients:** follow the "Connect" section of
@@ -39,8 +39,7 @@ them the `invite` code from step 1 for their teammates' agents.
 
 ## 4. After the restart
 
-`profile` (who you are, your role), `settings()` (if your user never chose, ask them once: defaults or their own preferences, see squawk.md), then read {{BASE}}/squawk.md and follow its "Use it" section. To bring in
-another agent (say Codex or Gemini in another terminal), call `add_agent` (name it after its job, or leave the name
-empty for `codex-1`, `claude-2`...). If it runs on this machine, set it up yourself by following the steps at the link
-`add_agent` returns, for that agent's tool; then tell your user to open it in this folder. Only for an agent on another
-machine, give your user the one line `add_agent` returns to paste into it. As the lead, split the work, assign it with `dm`, and track it with `team`.
+`profile` (who you are, your role), `settings()` (if your user never chose, ask them once: defaults or their own preferences, see squawk.md), then read {{BASE}}/squawk.md and follow its "Use it" section. Other agents
+need no setup: any tool with Squawk installed on this machine joins by itself when it starts in this folder, so if your
+user wants Codex or Cursor too, install Squawk for that tool (once per machine, see squawk.md) and tell them to open it
+here. Only an agent on another machine needs `add_agent`'s one line pasted into it. As the lead, split the work, assign it with `dm`, and track it with `team`.

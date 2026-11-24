@@ -24,7 +24,7 @@ encrypted project), add it to that JSON as `"key":"<key>"`.
 - **Claude Code:**
   ```bash
   claude plugin marketplace add daMS2005/squawk
-  claude plugin install squawk@squawk --scope project
+  claude plugin install squawk@squawk --scope user
   ```
 - **Codex:** `npm install -g github:daMS2005/squawk` and `codex mcp add squawk -- squawk-mcp`, plus the hooks in
   {{BASE}}/squawk.md so teammates' messages reach you without asking
