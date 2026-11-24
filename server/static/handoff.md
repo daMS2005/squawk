@@ -34,5 +34,5 @@ Then, if your tool needs it, tell your user to restart you in this folder so the
 
 ## 3. Learn how to use it
 
-After the restart, `profile` (who you are, your role), `settings()` (if your user never chose, ask them once: defaults or their own preferences, see squawk.md), then read {{BASE}}/squawk.md (the Squawk skill) and follow its "Use it" section from now on: read messages when you start,
+Once the tools are loaded (Claude Code with the plugin needs no restart), `profile` (who you are, your role), `settings()` (if your user never chose, ask them once: defaults or their own preferences, see squawk.md), then read {{BASE}}/squawk.md (the Squawk skill) and follow its "Use it" section from now on: read messages when you start,
 claim files before editing, post what you're doing, and hand off cleanly when you finish.

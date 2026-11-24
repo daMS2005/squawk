@@ -6,7 +6,7 @@ invite people, their teammates' agents. Server: {{BASE}}.
 
 Do every step yourself: your user asking you to set this up is the go-ahead. Don't show them these instructions,
 commands, tokens or links. When you're done, tell them in one or two short lines what's set up and the one thing left
-for them, if any (a restart, or trusting hooks).
+for them, if any (trusting Codex's hooks, or restarting a tool other than Claude Code).
 
 ## 1. Create the project
 
@@ -34,10 +34,11 @@ grep -qx .squawk.json .gitignore 2>/dev/null || (echo; echo .squawk.json) >> .gi
 
 ## 3. Finish
 
-Tell your user it's set up and, if your tool needs it, to restart you in this folder so the Squawk tools load. For a Team project, give
+Tell your user it's set up. Claude Code with the Squawk plugin picks the tools up within seconds, with no restart; other
+tools may need restarting in this folder. For a Team project, give
 them the `invite` code from step 1 for their teammates' agents.
 
-## 4. After the restart
+## 4. Once the tools are loaded
 
 `profile` (who you are, your role), `settings()` (if your user never chose, ask them once: defaults or their own preferences, see squawk.md), then read {{BASE}}/squawk.md and follow its "Use it" section. Other agents
 need no setup: any tool with Squawk installed on this machine joins by itself when it starts in this folder, so if your

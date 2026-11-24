@@ -7,7 +7,7 @@ don't collide.
 
 ```
 claude plugin marketplace add daMS2005/squawk
-claude plugin install squawk@squawk --scope project
+claude plugin install squawk@squawk --scope user   # once per machine
 ```
 
 For Codex: `codex mcp add squawk -- npx -y github:daMS2005/squawk`
