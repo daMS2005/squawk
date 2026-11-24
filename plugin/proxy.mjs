@@ -29,11 +29,12 @@ function configFile() {
     if (existsSync(join(dir, ".git")) || dirname(dir) === dir) return "";  // never above the repository's own root
   }
 }
-const CONFIG = configFile();
+let CONFIG = configFile();
 let PROJECT, BASE, TOKENS, KEY, TAG_KEY, LOADED = -1, TOKEN = "", CLIENT = "", WINDOW = "";
 const env = (name) => (PROJECT.url ? PROJECT[name.toLowerCase()] : process.env[`SQUAWK_${name}`] || process.env[`AGENT_CHAT_${name}`]) || "";
 // Re-read .squawk.json when it changes, so a token saved after the client started works without a restart.
 function load() {
+  CONFIG ||= configFile();  // setup may write it after we started
   let mtime = 0;
   try { mtime = CONFIG && statSync(CONFIG).mtimeMs; } catch {}
   if (mtime === LOADED) return;
@@ -128,17 +129,30 @@ export function decrypt(text, key = KEY) {
 }
 
 let OWN = "", watching, claiming = Promise.resolve();  // the thread or session this MCP process serves, and its background watcher
+const send = (o) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...o }) + "\n");
+function started(client) {
+  useTokenFor(client);
+  if (!/codex|opencode/i.test(CLIENT)) claiming = claimWindow(String(process.ppid));  // Codex threads share a parent
+}
+
 async function relay(msg) {
   load();
   if (!BASE) {
-    if (msg.id !== undefined) process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: msg.id,
-      error: { code: -32000, message: "Squawk isn't set up for this project: add .squawk.json from the web app's Connect agent tab" } }) + "\n");
+    if (msg.method === "initialize") {  // answer anyway, so the client keeps this server: setup often happens after it starts
+      CLIENT = msg.params?.clientInfo?.name || "";
+      const wait = setInterval(() => {  // once .squawk.json appears, the tools appear too, without a restart
+        load();
+        if (BASE) clearInterval(wait), started(CLIENT), send({ method: "notifications/tools/list_changed" });
+      }, 3000);
+      wait.unref();
+      return send({ id: msg.id, result: { protocolVersion: msg.params?.protocolVersion || "2025-06-18",
+        capabilities: { tools: { listChanged: true } }, serverInfo: { name: "squawk", version: "2.1.1" } } });
+    }
+    if (msg.method === "tools/list") return send({ id: msg.id, result: { tools: [] } });
+    if (msg.id !== undefined) send({ id: msg.id, error: { code: -32000, message: "Squawk isn't set up for this project yet: ask your agent to set it up" } });
     return;
   }
-  if (msg.method === "initialize") {
-    useTokenFor(msg.params?.clientInfo?.name);
-    if (!/codex|opencode/i.test(CLIENT)) claiming = claimWindow(String(process.ppid));  // Codex threads share a parent
-  }
+  if (msg.method === "initialize") started(msg.params?.clientInfo?.name);
   const meta = msg.params?._meta;  // Codex and OpenCode name the thread or session on each tool call
   const thread = meta?.threadId || meta?.["ai.opencode/sessionID"];
   if (thread && thread !== OWN) {
