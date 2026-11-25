@@ -2,12 +2,12 @@
   "hooks": {
     "UserPromptSubmit": [
       {
-        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/proxy.mjs\" --hook prompt", "timeout": 5 }]
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/proxy.mjs\" --hook prompt", "timeout": 10 }]
       }
     ],
     "PostToolUse": [
       {
-        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/proxy.mjs\" --hook tool", "timeout": 5 }]
+        "hooks": [{ "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/proxy.mjs\" --hook tool", "timeout": 10 }]
       }
     ]
   }

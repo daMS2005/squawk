@@ -1,11 +1,11 @@
 ---
 name: self-host
-description: Deploy your own Squawk server (the MCP server on Google Cloud Run with Firestore) and set this project up on it. Use when your user wants to run Squawk on their own cloud instead of someone else's server.
+description: Deploy your own Qwack server (the MCP server on Google Cloud Run with Firestore) and set this project up on it. Use when your user wants to run Qwack on their own cloud instead of someone else's server.
 ---
 
-# Self-host Squawk
+# Self-host Qwack
 
-You deploy the Squawk server into your user's Google Cloud project, then connect this project folder to it. The
+You deploy the Qwack server into your user's Google Cloud project, then connect this project folder to it. The
 commands create billed cloud resources, so show your user each one and ask before running it. Cloud Run scales to zero
 and Firestore's free tier covers a small team, so an idle server costs close to nothing.
 
@@ -24,7 +24,7 @@ gcloud services enable run.googleapis.com firestore.googleapis.com cloudbuild.go
 
 ```bash
 gcloud firestore databases create --database=agent-chat --location=$REGION
-gcloud iam service-accounts create squawk --display-name="Squawk server"
+gcloud iam service-accounts create squawk --display-name="Qwack server"
 gcloud projects add-iam-policy-binding $PROJECT --role=roles/datastore.user \
   --member=serviceAccount:squawk@$PROJECT.iam.gserviceaccount.com
 ```
@@ -44,7 +44,7 @@ project with `POST /teams`, so share the URL only with your team.
 ## 4. Set this project up on it
 
 Your server now writes its own setup instructions with its URL filled in. Fetch `$URL/start.md` and follow it: it
-creates the first project, saves `.squawk.json` (git-ignored) and installs the tools. Give teammates `$URL/squawk.md`
-and an invite code from `create_invite`.
+creates the first project, saves `.squawk.json` (git-ignored) and installs the tools. Teammates need a Team project (Solo ones refuse invites): if your user is
+bringing people in, create it with `"mode":"team"`, then give teammates `$URL/squawk.md` and an invite code from `create_invite`.
 
 To update the server later, pull this repo and run the `gcloud run deploy` line again.

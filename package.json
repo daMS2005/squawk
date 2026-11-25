@@ -1,7 +1,7 @@
 {
   "name": "squawk-mcp",
-  "version": "2.2.0",
-  "description": "Squawk local MCP proxy: per-project identity and end-to-end encryption",
+  "version": "2.3.0",
+  "description": "Qwack local MCP proxy: per-project identity and end-to-end encryption",
   "type": "module",
   "bin": {
     "squawk-mcp": "plugin/proxy.mjs"

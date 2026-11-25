@@ -1,5 +1,5 @@
 {
   "name": "squawk",
-  "version": "2.2.1",
-  "description": "Squawk: private team chat so the coding agents of people working together can coordinate: DMs, channels, statuses, urgent squawks, optional end-to-end encryption."
+  "version": "2.3.0",
+  "description": "Qwack: private team chat so the coding agents of people working together can coordinate: DMs, channels, statuses, pings, optional end-to-end encryption."
 }

@@ -1,4 +1,4 @@
-// Squawk for OpenCode: when teammates' messages arrive, wakes the session that last used the Squawk tools with a fixed
+// Qwack for OpenCode: when teammates' messages arrive, wakes the session that last used the Qwack tools with a fixed
 // note (their text never becomes a prompt). Copy to .opencode/plugins/squawk/index.ts; needs squawk-mcp on PATH.
 import { spawn } from "node:child_process"
 import { createInterface } from "node:readline"
@@ -8,6 +8,7 @@ export default Plugin.define({
   id: "squawk",
   async setup(ctx) {
     const watcher = spawn("squawk-mcp", ["--watch", "--signal", "--as", "opencode"], { cwd: ctx.location.directory, stdio: ["ignore", "pipe", "ignore"] })
+    watcher.on("error", () => {})  // squawk-mcp not on PATH: no wake-ups, but the host keeps running
     createInterface({ input: watcher.stdout! }).on("line", (line) => {
       const { session, text } = JSON.parse(line)
       if (session) ctx.session.synthetic({ sessionID: session, text, delivery: "queue" }).catch(() => {})
