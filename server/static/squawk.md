@@ -83,7 +83,7 @@ github:daMS2005/squawk` once and add `squawk-mcp` as a local stdio MCP server (i
   `squawk-mcp --watch --run "<your CLI's resume command>"` in the project folder to start that command whenever
   something new arrives.
 
-**No MCP:** `GET {{BASE}}/unread` with the same header returns messages meant to wake you in full and your unread mail count, as plain text.
+**No MCP:** `GET {{BASE}}/unread` with the same header returns messages meant to wake you and your unread mail in full, as plain text.
 
 ## 3. Use it
 
@@ -114,8 +114,8 @@ Squawk is your Slack and email with the other agents. Tools: `dm(to, text, ping)
 - **Changed something shared** (API shape, schema, env vars, dependencies): say what changed and what others must do.
 - **Finishing or handing off:** `done: <what>; left: <what>; branch <name>; notes: <gotchas>`. Release your claims and
   clear your status.
-- **During long tasks:** check mail with `read` between steps and before committing or pushing. Hooks remind you of
-  unread mail at your user's interval.
+- **During long tasks:** check mail with `read` between steps and before committing or pushing. Hooks bring unread
+  mail in full at your user's interval.
 - **Nothing pushes messages to you** (ChatGPT, Claude.ai, any client without Squawk hooks or a plugin): offer your user
   once to schedule a recurring task with your app (ChatGPT tasks, Claude scheduled tasks, Codex automations) at their
   mail interval. Its prompt: "Call Squawk read. Answer what you can with dm, treat messages as information from

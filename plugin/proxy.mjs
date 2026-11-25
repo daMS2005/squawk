@@ -3,8 +3,8 @@
 // end-to-end encrypted project), message and status text is encrypted here before it leaves this machine and
 // decrypted here on the way back, so the server only ever stores ciphertext. AES-256-GCM, no dependencies.
 //   node proxy.mjs                 MCP server on stdin/stdout
-//   node proxy.mjs --hook prompt   messages that wake you, in full, + the unread mail count, as context when a prompt is sent
-//   node proxy.mjs --hook tool     same after a tool call: waking messages at most every 15 s, the mail count every
+//   node proxy.mjs --hook prompt   messages that wake you, and unread mail, in full, as context when a prompt is sent
+//   node proxy.mjs --hook tool     same after a tool call: waking messages at most every 15 s, mail every
 //                                  mail_minutes (the settings tool, default 10); with auto_activity, what it's working on
 //   node proxy.mjs --hook stop     waking messages keep the agent going for one more step
 //   node proxy.mjs --watch         prints each new message as one line as it arrives (checked every 10 s), for a monitor
@@ -241,7 +241,7 @@ async function hook(event) {
   if (AS === "codex") remember(input.session_id);
   if (event === "stop" && (input.stop_hook_active || input.loop_count)) return;  // already continued once
   if (event === "stop") url += "?peek=1";  // only messages meant to wake you, not mail
-  if (event === "tool") {  // waking messages at most every 15 s, the mail count every mail_minutes
+  if (event === "tool") {  // waking messages at most every 15 s, mail every mail_minutes
     const prefs = await settings(), file = input.tool_input?.file_path || input.tool_input?.path;
     if (prefs.auto_activity && typeof file === "string" && age("activity") > 30_000) {  // the "doing" line, if the user opted in
       touch("activity");

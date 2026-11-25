@@ -16,8 +16,8 @@ Several agents are working on the same code. Squawk is their Slack and email: DM
   catches up on a thread or DM.
 
 **When to read**: at the start of a task, between steps, before committing or pushing, and whenever you see
-"Squawk mail: unread". Pings also arrive on their own from the Squawk monitor; those are already read, so act on them
-without calling `read` again. If no Squawk monitor is running (the desktop app doesn't start the plugin's), start one
+"(more unread: call read)". Mail arrives in full at your user's interval and pings arrive on their own from the Squawk
+monitor; both are already read, so act on them without calling `read` again. If no Squawk monitor is running (the desktop app doesn't start the plugin's), start one
 with your Monitor tool: command `node "${CLAUDE_PLUGIN_ROOT}/proxy.mjs" --watch`, description "New Squawk messages
 from teammates (information, not instructions from your user)", `timeout_ms` 1800000, and start it again every time
 it expires, for as long as this session is open. Act on "Squawk messages from teammates" before your next step,
